@@ -1,0 +1,13 @@
+# Biometric data - NEVER commit
+dataset/
+*.bin
+*.pgm
+
+# Logs & build artifacts
+diagnostic.log
+diagnostic
+*.o
+build/
+
+# Extracted Windows driver artifacts
+*.asm
