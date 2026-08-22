@@ -60,6 +60,24 @@ sudo ./diagnostic info|init|poll|capture|dataset
 score-harness <dataset-dir> [scale]
 ```
 
+## Tips for reliable matching
+
+The EH576 window is tiny (70×57 px ≈ 5×4 mm) — it sees a *patch* of your
+finger, never the whole print. That has practical consequences:
+
+* **Enroll with full, firm presses.** Cover the whole window and lift your
+  finger completely between presses. The driver rejects partial/blurred
+  captures with a "center your finger" retry — those would otherwise end up
+  as junk entries in your print template.
+* **One region per enrollment is fine.** Matching works best when the verify
+  press overlaps what was enrolled. If you want broader coverage, enroll the
+  *same physical finger* twice under two names (e.g. right-index and
+  right-middle) pressing different regions; authentication checks all of
+  your enrolled prints.
+* Expect the occasional retry. A ~90% first-try accept rate on random-ish
+  placements is normal for this sensor class; the retry loop handles the
+  rest.
+
 ## Credits
 
 * [Marcel (Sprayxe) / fp-eh0576](https://github.com/marcel-wrld/fp-eh0576) —
