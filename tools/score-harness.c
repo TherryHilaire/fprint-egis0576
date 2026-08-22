@@ -78,6 +78,8 @@ raw_variance (const guchar *img)
   return sd / IMG_SIZE;
 }
 
+static int opt_pct = 0;
+
 static void
 normalize_img (const guchar *bg, guchar *img, double *dark_portion,
                int *raw_range)
@@ -97,14 +99,52 @@ normalize_img (const guchar *bg, guchar *img, double *dark_portion,
 
   *raw_range = max - min;
 
-  max -= CONTRAST;
-  min += CONTRAST;
-  int range = max - min ? max - min : 1;
+  int lo = min + CONTRAST;
+  int hi = max - CONTRAST;
+
+  if (opt_pct > 0 && hi > lo)
+    {
+      /* Robust bounds: clip opt_pct percent from both tails of the
+       * difference histogram before stretching. */
+      int hist[512] = { 0 };
+
+      for (int i = 0; i < IMG_SIZE; i++)
+        hist[diff[i] + 256]++;
+
+      int tail = IMG_SIZE * opt_pct / 100;
+      int acc = 0;
+      int plo = -256, phi = 255;
+
+      for (int v = -256; v <= 255; v++)
+        {
+          acc += hist[v + 256];
+          if (acc > tail)
+            {
+              plo = v;
+              break;
+            }
+        }
+      acc = 0;
+      for (int v = 255; v >= -256; v--)
+        {
+          acc += hist[v + 256];
+          if (acc > tail)
+            {
+              phi = v;
+              break;
+            }
+        }
+
+      lo = plo;
+      hi = phi;
+    }
+
+  int range = hi - lo ? hi - lo : 1;
 
   int ridges = 0;
   for (int i = 0; i < IMG_SIZE; i++)
     {
-      int norm = ((diff[i] - min) * 255) / range;
+      int norm = ((diff[i] - lo) * 255) / range;
 
       if (norm < RIDGE)
         {
@@ -218,9 +258,12 @@ main (int argc, char **argv)
 {
   const char *dir = argc > 1 ? argv[1] : "dataset";
   int scale = argc > 2 ? atoi (argv[2]) : 2;
+  opt_pct = argc > 3 ? atoi (argv[3]) : 0;
 
   if (scale < 1 || scale > 3)
     scale = 2;
+  if (opt_pct < 0 || opt_pct > 20)
+    opt_pct = 0;
 
   guchar bg[IMG_SIZE];
   char path[512];
@@ -263,7 +306,8 @@ main (int argc, char **argv)
 
   sample *samples = g_new0 (sample, n);
 
-  fprintf (stderr, "processing %d frames (scale=%dx)...\n", n, scale);
+  fprintf (stderr, "processing %d frames (scale=%dx, pct-clip=%d%%)...\n",
+           n, scale, opt_pct);
 
   for (int i = 0; i < n; i++)
     {
