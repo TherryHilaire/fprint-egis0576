@@ -1,0 +1,37 @@
+From 7935c691358447b541ca44d1b8b327daf394da87 Mon Sep 17 00:00:00 2001
+From: TherryHilaire <therryhilaire@users.noreply.github.com>
+Date: Sat, 22 Aug 2026 11:05:14 -0400
+Subject: [PATCH 2/3] meson: register egis0576 driver
+
+---
+ libfprint/meson.build | 1 +
+ meson.build           | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/libfprint/meson.build b/libfprint/meson.build
+index f11533c..6fdf398 100644
+--- a/libfprint/meson.build
++++ b/libfprint/meson.build
+@@ -116,6 +116,7 @@ driver_sources = {
+     ),
+     'etes603' : files('drivers/etes603.c'),
+     'egis0570' : files('drivers/egis0570.c'),
++    'egis0576' : files('drivers/egis0576.c'),
+     'egismoc' : files('drivers/egismoc/egismoc.c'),
+     'egis_etu905' : files('drivers/egismoc/egis_etu905.c'),
+     'vfs0050' : files('drivers/vfs0050.c'),
+diff --git a/meson.build b/meson.build
+index ab09dc1..65b3571 100644
+--- a/meson.build
++++ b/meson.build
+@@ -130,6 +130,7 @@ drivers_info = {
+     'vfs0050': { 'endian_dependent': true },
+     'etes603': {},
+     'egis0570': {},
++    'egis0576': {},
+     'egismoc': {},
+     'egis_etu905': {},
+     'vcom5s': {},
+-- 
+2.55.0
+

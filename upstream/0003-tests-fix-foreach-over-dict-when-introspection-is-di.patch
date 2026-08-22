@@ -1,0 +1,37 @@
+From 78bc872535725c375073a0f95a1be4575746ec1c Mon Sep 17 00:00:00 2001
+From: TherryHilaire <therryhilaire@users.noreply.github.com>
+Date: Sat, 22 Aug 2026 11:05:14 -0400
+Subject: [PATCH 3/3] tests: fix foreach over dict when introspection is
+ disabled
+
+drivers_tests is a dict; iterating it without destructuring errors
+out in newer meson. Iterate .keys() instead so the tree configures
+with -Dintrospection=false.
+---
+ tests/meson.build | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/tests/meson.build b/tests/meson.build
+index aad0675..812effe 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -292,7 +292,7 @@ else
+         args: ['-c', 'exit 77']
+     )
+ 
+-    foreach driver_test: drivers_tests
++    foreach driver_test: drivers_tests.keys()
+         test(driver_test,
+             sh,
+             args: ['-c', 'exit 77']
+@@ -377,6 +377,7 @@ foreach test_name: unit_tests
+     )
+ endforeach
+ 
++
+ # Run udev rule generator with fatal warnings
+ hwdb_envs = envs
+ hwdb_envs.set('UDEV_HWDB', udev_hwdb.full_path())
+-- 
+2.55.0
+
