@@ -94,6 +94,27 @@ finger, never the whole print. That has practical consequences:
   placements is normal for this sensor class; the retry loop handles the
   rest.
 
+## KeePassXC fingerprint unlock
+
+KeePassXC has no native biometric unlock on Linux (that is a Windows Hello
+integration). `keepassxc/` provides the same UX on top of fprintd:
+
+```
+sudo pacman -S keepassxc libsecret
+cd keepassxc
+./setup.sh      # once: store the DB passphrase in your session keyring
+./unlock.sh     # daily: fingerprint -> database opens
+```
+
+Customize the database path with `KEEPASSXC_DB=/path/to/file.kdbx ./unlock.sh`.
+
+How it works: `fprintd-verify` gates access, then the passphrase is read
+from the session keyring (which PAM already unlocked at desktop login)
+and piped to `keepassxc --pw-stdin`. The database remains encrypted at
+rest; this mirrors the Windows Hello trust model - the fingerprint is a
+convenience gate for an already-authenticated session, not additional
+encryption.
+
 ## Credits
 
 * [Marcel (Sprayxe) / fp-eh0576](https://github.com/marcel-wrld/fp-eh0576) —
