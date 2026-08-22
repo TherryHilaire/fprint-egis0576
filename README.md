@@ -35,6 +35,20 @@ of flaky matching reported with earlier attempts, e.g. MR !571).
 
 ## Using the driver
 
+### Easy way
+
+```
+git clone https://github.com/TherryHilaire/fprint-egis0576
+cd fprint-egis0576
+./install.sh
+```
+
+The script clones upstream libfprint, drops in the driver, patches the
+build files, and compiles. It prints the few `sudo` commands to finish
+the installation.
+
+### Manual way
+
 Build libfprint (upstream master) with `driver/egis0576.{c,h}` added to
 `libfprint/drivers/`, registered in `libfprint/meson.build` (`driver_sources`)
 and top-level `meson.build` (`drivers_info`):
@@ -47,7 +61,9 @@ fprintd-enroll && fprintd-verify
 ```
 
 Note: installing to `/usr/local` shadows the distribution libfprint without
-touching pacman/rpm/deb-managed files.
+touching pacman/rpm/deb-managed files. If your distribution does not search
+`/usr/local/lib`, add it to the linker path
+(`echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/99-local.conf`).
 
 ## Tools
 
