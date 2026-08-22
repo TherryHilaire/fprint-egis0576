@@ -735,6 +735,157 @@ mode_dataset (void)
   return 0;
 }
 
+static int
+write_reg (unsigned char reg, unsigned char val)
+{
+  unsigned char resp[RESP_BUF_SIZE];
+  int actual;
+  const unsigned char cmd[7] = { 0x45, 0x47, 0x49, 0x53, 0x61, reg, val };
+
+  if (send_recv (cmd, sizeof (cmd), 7, resp, RESP_BUF_SIZE, &actual) != 0)
+    return -1;
+  return check_response (cmd, resp, actual) ? 0 : -1;
+}
+
+typedef struct
+{
+  unsigned char reg;
+  unsigned char val;
+} sweep_cfg;
+
+#define SWEEP_N 16
+static const sweep_cfg SWEEP_CONFIGS[SWEEP_N] = {
+  { 0x24, 0x30 }, { 0x24, 0x34 }, { 0x24, 0x38 }, { 0x24, 0x3c },
+  { 0x24, 0x40 }, { 0x21, 0x35 }, { 0x21, 0x3d }, { 0x21, 0x45 },
+  { 0x21, 0x4d }, { 0x21, 0x55 }, { 0x20, 0x00 }, { 0x20, 0x08 },
+  { 0x20, 0x10 }, { 0x20, 0x18 }, { 0x20, 0x20 }, { 0x20, 0x28 },
+};
+
+static int
+mode_sweep (void)
+{
+  unsigned char frame[IMG_SIZE];
+  unsigned char background[IMG_SIZE];
+
+  printf ("This sweep writes tuning registers (0x24 gain, 0x21, 0x20)\n");
+  printf ("one at a time on top of a fresh INIT. Values revert on next init.\n\n");
+  if (run_init_sequence () != 0)
+    return 1;
+
+  printf ("Lift finger - capturing no-finger background...\n");
+  for (int i = 0; i < 60; i++)
+    {
+      if (fetch_frame (frame) != 0)
+        return 1;
+      double v = frame_variance (frame);
+      if (v >= 0 && v < BG_VARIANCE)
+        {
+          memcpy (background, frame, IMG_SIZE);
+          break;
+        }
+      usleep (50000);
+    }
+
+  run_repeat_sequence ();
+
+  printf ("\n>>> PLACE FINGER FIRMLY AND HOLD STEADY UNTIL SWEEP COMPLETES <<<\n\n");
+  sleep (2);
+
+  log_printf ("\n=== REGISTER SWEEP ===\n");
+  log_printf ("%6s %6s %10s %10s %8s\n", "reg", "val", "variance", "contrast", "dark%");
+  printf ("%6s %6s %10s %10s %8s\n", "reg", "val", "variance", "contrast", "dark%");
+
+  int best_i = -1;
+  double best_score = -1;
+
+  for (int c = 0; c < SWEEP_N; c++)
+    {
+      write_reg (SWEEP_CONFIGS[c].reg, SWEEP_CONFIGS[c].val);
+      usleep (20000);
+
+      double var_sum = 0, con_sum = 0, dark_sum = 0;
+      int ok_frames = 0;
+
+      for (int k = 0; k < 3; k++)
+        {
+          if (run_repeat_sequence () != 0)
+            goto out;
+          if (fetch_frame (frame) != 0)
+            goto out;
+
+          double variance = frame_variance (frame);
+          if (variance <= FINGER_VARIANCE)
+            continue;
+
+          unsigned char processed[IMG_SIZE];
+          double dark_portion = 0;
+          memcpy (processed, frame, IMG_SIZE);
+          normalize_frame (background, processed, &dark_portion);
+
+          /* contrast: stddev of the normalized image */
+          double sum = 0;
+          for (int i = 0; i < IMG_SIZE; i++)
+            sum += processed[i];
+          double mean = sum / IMG_SIZE;
+          double sd = 0;
+          for (int i = 0; i < IMG_SIZE; i++)
+            {
+              double d = processed[i] - mean;
+              sd += d * d;
+            }
+
+          var_sum += variance;
+          con_sum = sd / IMG_SIZE;
+          dark_sum += dark_portion;
+          ok_frames++;
+        }
+
+      if (ok_frames == 0)
+        {
+          log_printf ("0x%02x   0x%02x %10s\n",
+                      SWEEP_CONFIGS[c].reg, SWEEP_CONFIGS[c].val, "no-finger?");
+          printf ("0x%02x   0x%02x %10s\n",
+                  SWEEP_CONFIGS[c].reg, SWEEP_CONFIGS[c].val, "no-finger?");
+          continue;
+        }
+
+      double var_avg = var_sum / ok_frames;
+      double con_avg = con_sum / ok_frames;
+      double dark_avg = dark_sum / ok_frames;
+
+      log_printf ("0x%02x   0x%02x %10.2f %10.2f %8.3f\n",
+                  SWEEP_CONFIGS[c].reg, SWEEP_CONFIGS[c].val,
+                  var_avg, con_avg, dark_avg);
+      printf ("0x%02x   0x%02x %10.2f %10.2f %8.3f\n",
+              SWEEP_CONFIGS[c].reg, SWEEP_CONFIGS[c].val,
+              var_avg, con_avg, dark_avg);
+
+      if (con_avg > best_score && dark_avg > DARK_PORTION_MIN)
+        {
+          best_score = con_avg;
+          best_i = c;
+        }
+    }
+
+out:
+  if (best_i >= 0)
+    {
+      log_printf ("BEST: reg 0x%02x = 0x%02x (contrast %.2f)\n",
+                  SWEEP_CONFIGS[best_i].reg, SWEEP_CONFIGS[best_i].val,
+                  best_score);
+      printf ("\nBEST: reg 0x%02x = 0x%02x (normalized-contrast %.2f)\n",
+              SWEEP_CONFIGS[best_i].reg, SWEEP_CONFIGS[best_i].val, best_score);
+
+      char path[64];
+      snprintf (path, sizeof (path), "sweep_best_%02x_%02x.pgm",
+                SWEEP_CONFIGS[best_i].reg, SWEEP_CONFIGS[best_i].val);
+      fetch_frame (frame);
+      write_pgm (path, frame, IMG_WIDTH, IMG_HEIGHT);
+    }
+  printf ("\nYou may remove your finger.\n");
+  return 0;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -795,6 +946,10 @@ main (int argc, char **argv)
     {
       exit_code = mode_dataset ();
     }
+  else if (strcmp (mode, "sweep") == 0)
+    {
+      exit_code = mode_sweep ();
+    }
   else if (strcmp (mode, "full") == 0)
     {
       mode_info ();
@@ -802,7 +957,7 @@ main (int argc, char **argv)
     }
   else
     {
-      fprintf (stderr, "usage: %s [info|init|poll|capture|dataset|full]\n", argv[0]);
+      fprintf (stderr, "usage: %s [info|init|poll|capture|dataset|sweep|full]\n", argv[0]);
       exit_code = 2;
     }
 
